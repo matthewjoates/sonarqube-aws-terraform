@@ -2,8 +2,8 @@ locals {
   sonarqube_db_name      = "sonarqube"
   sonarqube_db_username  = "sonaruser"
   sonarqube_jdbc_url     = "jdbc:postgresql://"
-  amazon_linux_user_data = file("./utils/init-sq.sh")
   sonarqube_tcp_port     = 9000
+  sonarqube_init_script  = file("./utils/init-sq.sh")
 }
 
 module "sonarqube_vpc" {
@@ -40,11 +40,11 @@ module "sonarqube_server" {
   source                            = "./modules/ec2"
   ec2_instance_name                 = "sonarqube"
   instance_type                     = "t3.medium"
-  user_data                         = local.amazon_linux_user_data
+  user_data                         = local.sonarqube_init_script
   network_interface_security_groups = [module.sonarqube_vpc.public_security_group_id]
   network_interface_subnet_id       = module.sonarqube_vpc.public_subnet_id
   vpc_id                            = module.sonarqube_vpc.vpc_id
-  target_port                       = local.sonarqube_port
+  target_port                       = local.sonarqube_tcp_port
   certificate_arn                   = module.sonarqube_https_certificate.certificate_arn
   providers = {
     aws = aws.main
