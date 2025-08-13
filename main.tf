@@ -3,7 +3,7 @@ locals {
   sonarqube_db_username  = "sonaruser"
   sonarqube_jdbc_url     = "jdbc:postgresql://"
   amazon_linux_user_data = file("./utils/init-sq.sh")
-  sonarqube_tcp_port         = 9000
+  sonarqube_tcp_port     = 9000
 }
 
 module "sonarqube_vpc" {
