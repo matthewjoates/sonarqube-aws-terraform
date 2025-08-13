@@ -3,7 +3,7 @@ locals {
   sonarqube_db_username  = "sonaruser"
   sonarqube_jdbc_url     = "jdbc:postgresql://"
   amazon_linux_user_data = file("./utils/init-sq.sh")
-  sonarqube_port         = 9000
+  sonarqube_tcp_port         = 9000
 }
 
 module "sonarqube_vpc" {
@@ -15,7 +15,7 @@ module "sonarqube_vpc" {
   vpc_cidr_block               = "172.16.0.0/16"
   public_subnet_cidr_block_az1 = "172.16.20.0/24"
   public_subnet_cidr_block_az2 = "172.16.21.0/24"
-  open_port                    = local.sonarqube_port
+  open_port                    = local.sonarqube_tcp_port
 }
 
 module "sonarqube_db" {
