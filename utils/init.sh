@@ -10,11 +10,10 @@
 #   ./utils/apply.sh
 #
 # =============================================================================
-
 required_vars=(
   AWS_PROFILE
-  AWS_ACCOUNT_ID
-  AWS_CENTRAL_TERRAFORM_EXECUTION_ROLE
+  ROOT_DOMAIN_NAME
+  ROOT_DOMAIN_HOSTED_ZONE_ID
 )
 
 for var in "${required_vars[@]}"; do
@@ -31,10 +30,19 @@ if [ "${#unset_vars[@]}" -gt 0 ]; then
   exit 1
 fi
 
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --profile "$AWS_PROFILE" --query 'Account' --output text)
+AWS_REGION=$(aws configure get region --profile "$AWS_PROFILE")
+
 # ====================== Terraform Environment Variables ======================
+export TF_VAR_root_domain_name="$ROOT_DOMAIN_NAME"
+export TF_VAR_root_domain_hz_id="$ROOT_DOMAIN_HOSTED_ZONE_ID"
+export TF_VAR_aws_role_arn="arn:aws:iam::$AWS_ACCOUNT_ID:role/TerraformExecutionRole"
+export TF_VAR_aws_region="$AWS_REGION"
+# ======================= End TF Environment Variables ========================
+
 
 # ========================= AWS Environment Variables =========================
-export CENTRAL_ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/$AWS_CENTRAL_TERRAFORM_EXECUTION_ROLE"
+export CENTRAL_ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/CentralTerraformRole"
 # ======================= End AWS Environment Variables =======================
 
 
@@ -63,9 +71,9 @@ export AWS_SESSION_TOKEN=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r '.Credentials.Sess
 echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 terraform init \
             -backend-config="region=eu-west-1" \
-            -backend-config="bucket=sonarqube-tf-state-bucket" \
+            -backend-config="bucket=sonarqube-bucket-975049898339-eu-west-1" \
             -backend-config="key=sonarqube/eu-west-1/terraform.tfstate" \
-            -backend-config="dynamodb_table=sonarqube-tf-state-lock-table" \
+            -backend-config="dynamodb_table=sonarqube-lock-table" \
             -backend-config="encrypt=true" \
             -migrate-state
 echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"

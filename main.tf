@@ -1,9 +1,9 @@
 locals {
-  sonarqube_db_name      = "sonarqube"
-  sonarqube_db_username  = "sonaruser"
-  sonarqube_jdbc_url     = "jdbc:postgresql://"
-  sonarqube_tcp_port     = 9000
-  sonarqube_init_script  = file("./utils/init-sq.sh")
+  sonarqube_db_name     = "sonarqube"
+  sonarqube_db_username = "sonaruser"
+  sonarqube_jdbc_url    = "jdbc:postgresql://"
+  sonarqube_tcp_port    = 9000
+  sonarqube_init_script = file("./utils/init-sq.sh")
 }
 
 module "sonarqube_vpc" {
@@ -53,7 +53,7 @@ module "sonarqube_server" {
 
 module "sonarqube_https_certificate" {
   source         = "./modules/acm"
-  domain_name    = concat("sonarqube.", var.root_domain_name)
+  domain_name    = "sonarqube.${var.root_domain_name}"
   hosted_zone_id = var.root_domain_hz_id
   providers = {
     aws = aws.main
