@@ -58,4 +58,5 @@ module "sonarqube_https_certificate" {
   providers = {
     aws = aws.main
   }
+  count = var.create_https_certificate ? 1 : 0
 }

@@ -9,6 +9,12 @@ variable "aws_role_arn" {
   type        = string
 }
 
+variable "create_https_certificate" {
+  description = "Whether to create the HTTPS certificate for SonarQube."
+  type        = bool
+  default     = true
+}
+
 variable "root_domain_name" {
   description = "The root domain name for the infrastructure"
   type        = string
