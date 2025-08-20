@@ -64,17 +64,23 @@ ret=$?
 if ! [ $ret -eq 0 ]; then
     echo "Assume Role Failed." && exit 1
 fi
+
 export AWS_ACCESS_KEY_ID=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r '.Credentials.AccessKeyId')
 export AWS_SECRET_ACCESS_KEY=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r '.Credentials.SecretAccessKey')
 export AWS_SESSION_TOKEN=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r '.Credentials.SessionToken')
 
+export AWS_S3_BUCKET="sonarqube-bucket-$AWS_ACCOUNT_ID-$AWS_REGION"
+export AWS_TF_KEY="sonarqube/$AWS_REGION/terraform.tfstate"
+export AWS_DYNAMODB_TABLE="sonarqube-lock-table"
+export AWS_S3_ENCRYPTION="true"
+
 echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 terraform init \
-            -backend-config="region=eu-west-1" \
-            -backend-config="bucket=sonarqube-bucket-975049898339-eu-west-1" \
-            -backend-config="key=sonarqube/eu-west-1/terraform.tfstate" \
-            -backend-config="dynamodb_table=sonarqube-lock-table" \
-            -backend-config="encrypt=true" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="bucket=$AWS_S3_BUCKET" \
+            -backend-config="key=$AWS_TF_KEY" \
+            -backend-config="dynamodb_table=$AWS_DYNAMODB_TABLE" \
+            -backend-config="encrypt=$AWS_S3_ENCRYPTION" \
             -migrate-state
 echo "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 
