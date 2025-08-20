@@ -1,0 +1,250 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  Manually deployed CloudFormation template to create S3 bucket for Terraform state,
+  DynamoDB table for Terraform state locking, OIDC connection for GitHub, and a role
+  to assume using the OIDC provider.
+
+Parameters:
+  NamePrefix:
+    Type: String
+    Default: "sonarqube"
+    Description: The string used to prefix created resource names
+  GitHubRepositoryName:
+    Type: String
+    Default: "sonarqube-aws-terraform"
+    Description: The name of the github repository
+  GitHubOrganisation:
+    Type: String
+    Default: "matthewjoates"
+    Description: The name of the github organisation
+  CreateNewOIDCProvider:
+      Type: String
+      AllowedValues:
+        - "true"
+        - "false"
+      Default: "false"
+      Description: |
+        (Optional) Whether to create a new GitHub OIDC provider or use an existing one in this AWS account.
+        If set to "false", the template will attempt to use the existing GitHub OIDC provider (arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com).
+        If set to "true", the template will try to create a new GitHub OIDC provider. This will fail if one already exists in the account.
+
+Resources:
+  TerraformStateS3Bucket:
+    # checkov:skip=CKV_AWS_18: Chicken/egg - Terraform is used to set up access logging bucket so cannot have access logging enabled in stack that set-ups Terraform pre-reqs
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Join:
+          - ""
+          - [ { "Ref": "NamePrefix" }, "-bucket" ]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: owner
+          Value:
+            Ref: AWS::StackId
+      VersioningConfiguration:
+        Status: Enabled
+
+  TerraformStateS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: TerraformStateS3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - "s3:*"
+            Effect: Deny
+            Resource:
+              - Fn::Sub: "arn:aws:s3:::${TerraformStateS3Bucket}/*"
+              - Fn::Sub: "arn:aws:s3:::${TerraformStateS3Bucket}"
+            Principal: '*'
+            Condition:
+              StringEquals:
+                "aws:SecureTransport":
+                  - "false"
+
+  TerraformStateLockDynamoDBTable:
+    # checkov:skip=CKV_AWS_28: PITR not required for storing temporary state lock
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: "${NamePrefix}-lock-table"
+      AttributeDefinitions:
+        - AttributeName: LockID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: LockID
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      Tags:
+        - Key: owner
+          Value:
+            Ref: AWS::StackId
+
+  OIDCProvider:
+      Condition: CreateNewOIDCProvider
+      Type: AWS::IAM::OIDCProvider
+      Properties:
+        Url: https://token.actions.githubusercontent.com
+        ClientIdList:
+          - sts.amazonaws.com
+
+  # For local use
+  CentralTerraformIamUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: CentralTerraformIamUser
+      Path: "/"
+
+  # IAM Policy to allow the user to only assume CentralTerraformRole
+  CentralTerraformIamUserPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AssumeCentralTerraformRolePolicy
+      Users:
+        - Ref: CentralTerraformIamUser
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource:
+              Fn::GetAtt:
+                - CentralTerraformRole
+                - Arn
+
+  CentralTerraformRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CentralTerraformRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowGitHub
+            Effect: Allow
+            Principal:
+                Federated:
+                    Fn::Sub: "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  Fn::Sub: "repo:${GitHubOrganisation}/${GitHubRepositoryName}:ref:*"
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+          - Sid: AllowUser
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::GetAtt:
+                  - CentralTerraformIamUser
+                  - Arn  # For local use
+            Action: sts:AssumeRole
+
+  TerraformExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: TerraformExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                Fn::GetAtt:
+                  - CentralTerraformRole
+                  - Arn
+            Action:
+              - 'sts:AssumeRole'
+              - "sts:TagSession"
+      Path: /
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess" # TODO: Reduce scope
+
+  CentralTerraformRoleIamPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ManageTFStateAndAssumeTFRole
+      Roles:
+        - Ref: CentralTerraformRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - "sts:AssumeRole"
+            Resource: # Any account can assume the role, so land as they share the same principal orgId. Hardcoded account Ids is stronger alternative.
+              Fn::Sub:
+                - "arn:aws:iam::${AccountId}:role/TerraformExecutionRole"
+                - { AccountId: { "Ref": "AWS::AccountId" } }
+          - Effect: Allow
+            Action:
+              - "s3:ListBucket"
+            Resource:
+              - Fn::GetAtt: [TerraformStateS3Bucket, Arn]
+              - "arn:aws:s3:::auk-euw2-ss-prod-tfmod"
+          - Effect: Allow
+            Action:
+              - "s3:GetObject"
+              - "s3:PutObject"
+              - "s3:DeleteObject"
+            Resource:
+              - Fn::Join:
+                  ["", [Fn::GetAtt: [TerraformStateS3Bucket, Arn], "/*"]]
+          - Effect: Allow
+            Action:
+              - "dynamodb:DescribeTable"
+              - "dynamodb:GetItem"
+              - "dynamodb:PutItem"
+              - "dynamodb:DeleteItem"
+            Resource:
+              - Fn::GetAtt: [TerraformStateLockDynamoDBTable, Arn]
+          - Effect: Allow
+            Action:
+              - "iam:GetRole"
+            Resource:
+              - Fn::GetAtt: [CentralTerraformRole, Arn]
+
+Outputs:
+  S3BucketName:
+    Description: Name of the S3 bucket for Terraform state
+    Value:
+      Ref: TerraformStateS3Bucket
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table for Terraform state locking
+    Value: 
+      Ref: TerraformStateLockDynamoDBTable
+  CentralTerraformRoleArn:
+    Description: ARN of the role for Terraform pipeline to assume
+    Value:
+      Fn::GetAtt:
+        - CentralTerraformRole
+        - Arn
+  CentralTerraformIamUser:
+    Description: "User for local execution of terraform actions"
+    Value:
+      Ref: CentralTerraformIamUser
+  TerraformExecutionRole:
+    Description: ARN of the role for Terraform executor to assume
+    Value:
+      Fn::GetAtt:
+        - TerraformExecutionRole
+        - Arn
+
+Conditions:
+  CreateNewOIDCProvider:
+    Fn::Equals:
+      - Ref: CreateNewOIDCProvider
+      - "true"

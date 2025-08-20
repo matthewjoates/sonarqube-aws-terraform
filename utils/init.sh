@@ -10,26 +10,45 @@
 #   ./utils/apply.sh
 #
 # =============================================================================
+
+required_vars=(
+  AWS_PROFILE
+  AWS_ACCOUNT_ID
+  AWS_CENTRAL_TERRAFORM_EXECUTION_ROLE
+)
+
+for var in "${required_vars[@]}"; do
+  if [ -z "${!var}" ]; then
+    unset_vars+=("$var")
+  fi
+done
+
+if [ "${#unset_vars[@]}" -gt 0 ]; then
+  echo "Error: The following environment variables are not set:"
+  for var in "${unset_vars[@]}"; do
+    echo "  - $var"
+  done
+  exit 1
+fi
+
 # ====================== Terraform Environment Variables ======================
 
-
 # ========================= AWS Environment Variables =========================
-export PROFILE="<PROFILE_NAME>"  # Replace with your AWS CLI profile name
-export CENTRAL_ROLE_ARN="arn:aws:iam::<ACCOUNT_ID>:role/<CENTRAL_TERRAFORM_EXECUTION_ROLE>"
+export CENTRAL_ROLE_ARN="arn:aws:iam::$AWS_ACCOUNT_ID:role/$AWS_CENTRAL_TERRAFORM_EXECUTION_ROLE"
 # ======================= End AWS Environment Variables =======================
 
 
 # ================================== Script ===================================
-echo "Connecting to AWS Connection using profile $PROFILE..."
-IDENTITY_JSON=$(aws sts get-caller-identity --profile "$PROFILE")
+echo "Connecting to AWS Connection using profile $AWS_PROFILE..."
+IDENTITY_JSON=$(aws sts get-caller-identity --profile "$AWS_PROFILE")
 if ! [ $? -eq 0 ]; then
     echo -e "AWS Connection failed." && exit 1
 fi
 
-echo "Fetching Access Keys for $PROFILE..."
-export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id --profile "$PROFILE")
-export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key --profile "$PROFILE")
-export AWS_SESSION_TOKEN=$(aws configure get aws_session_token --profile "$PROFILE")
+echo "Fetching Access Keys for $AWS_PROFILE..."
+export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id --profile "$AWS_PROFILE")
+export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key --profile "$AWS_PROFILE")
+export AWS_SESSION_TOKEN=$(aws configure get aws_session_token --profile "$AWS_PROFILE")
 
 echo "Assuming Role $CENTRAL_ROLE_ARN..."
 ASSUME_ROLE_OUTPUT=$(aws sts assume-role --role-arn "$CENTRAL_ROLE_ARN" --role-session-name "$(whoami)")
