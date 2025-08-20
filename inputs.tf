@@ -12,7 +12,7 @@ variable "aws_role_arn" {
 variable "create_https_certificate" {
   description = "Whether to create the HTTPS certificate for SonarQube."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "root_domain_name" {

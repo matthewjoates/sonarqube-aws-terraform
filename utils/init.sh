@@ -12,8 +12,6 @@
 # =============================================================================
 required_vars=(
   AWS_PROFILE
-  ROOT_DOMAIN_NAME
-  ROOT_DOMAIN_HOSTED_ZONE_ID
 )
 
 for var in "${required_vars[@]}"; do
@@ -38,6 +36,14 @@ export TF_VAR_root_domain_name="$ROOT_DOMAIN_NAME"
 export TF_VAR_root_domain_hz_id="$ROOT_DOMAIN_HOSTED_ZONE_ID"
 export TF_VAR_aws_role_arn="arn:aws:iam::$AWS_ACCOUNT_ID:role/TerraformExecutionRole"
 export TF_VAR_aws_region="$AWS_REGION"
+if [ -n "$ROOT_DOMAIN_NAME" ] && [ -n "$ROOT_DOMAIN_HOSTED_ZONE_ID" ]; then
+  echo "Enabling HTTPS on http://sonarqube.$ROOT_DOMAIN_NAME => https://sonarqube.$ROOT_DOMAIN_NAME"
+  export TF_VAR_create_https_certificate=true
+  export TF_VAR_root_domain_name="$ROOT_DOMAIN_NAME"
+  export TF_VAR_root_domain_hz_id="$ROOT_DOMAIN_HOSTED_ZONE_ID"
+else
+  echo "Disabling HTTPS"
+fi
 # ======================= End TF Environment Variables ========================
 
 

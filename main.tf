@@ -45,16 +45,17 @@ module "sonarqube_server" {
   network_interface_subnet_id       = module.sonarqube_vpc.public_subnet_id
   vpc_id                            = module.sonarqube_vpc.vpc_id
   target_port                       = local.sonarqube_tcp_port
-  certificate_arn                   = module.sonarqube_https_certificate.certificate_arn
   providers = {
     aws = aws.main
   }
 }
 
 module "sonarqube_https_certificate" {
-  source         = "./modules/acm"
-  domain_name    = "sonarqube.${var.root_domain_name}"
-  hosted_zone_id = var.root_domain_hz_id
+  source                             = "./modules/acm"
+  aws_load_balancer_arn              = module.sonarqube_server.aws_load_balancer_arn
+  aws_load_balancer_target_group_arn = module.sonarqube_server.aws_load_balancer_target_group_arn
+  domain_name                        = "sonarqube.${var.root_domain_name}"
+  hosted_zone_id                     = var.root_domain_hz_id
   providers = {
     aws = aws.main
   }

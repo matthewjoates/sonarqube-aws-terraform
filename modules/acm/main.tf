@@ -1,5 +1,8 @@
 variable "domain_name" {}
 variable "hosted_zone_id" {}
+variable "aws_load_balancer_arn" {}
+variable "aws_load_balancer_target_group_arn" {}
+
 
 resource "aws_acm_certificate" "cert" {
   domain_name       = var.domain_name
@@ -33,4 +36,15 @@ resource "aws_acm_certificate_validation" "cert_validation" {
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 }
 
-output "certificate_arn" { value = aws_acm_certificate.cert.arn }
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = var.aws_load_balancer_arn
+  port              = 443
+  protocol         = "HTTPS"
+  ssl_policy       = "ELBSecurityPolicy-2016-08"
+  certificate_arn  = aws_acm_certificate.cert.arn
+
+  default_action {
+    type = "forward"
+    target_group_arn = var.aws_load_balancer_target_group_arn
+  }
+}
