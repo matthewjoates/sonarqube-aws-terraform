@@ -35,16 +35,35 @@ module "sonarqube_db" {
   }
 }
 
-module "sonarqube_server" {
-  depends_on                        = [module.sonarqube_db]
-  source                            = "./modules/ec2"
-  ec2_instance_name                 = "sonarqube"
-  instance_type                     = "t3.medium"
-  user_data                         = local.sonarqube_init_script
-  network_interface_security_groups = [module.sonarqube_vpc.public_security_group_id]
+module "sonarqube_network_interface" {
+  source                            = "./modules/ec2-network-interface"
   network_interface_subnet_id       = module.sonarqube_vpc.public_subnet_id
+  network_interface_security_groups = [module.sonarqube_vpc.public_security_group_id]
+  prefix                            = "sonarqube"
+  providers = {
+    aws = aws.main
+  }
+}
+
+module "sonarqube_server" {
+  depends_on           = [module.sonarqube_db]
+  source               = "./modules/ec2-instance"
+  ec2_instance_name    = "sonarqube"
+  instance_type        = "t3.medium"
+  user_data            = local.sonarqube_init_script
+  network_interface_id = module.sonarqube_network_interface.network_interface_id
+  providers = {
+    aws = aws.main
+  }
+}
+
+module "sonarqube_load_balancer" {
+  source                            = "./modules/ec2-load-balancer"
+  prefix                            = "sonarqube"
+  network_interface_security_groups = [module.sonarqube_vpc.public_security_group_id]
   vpc_id                            = module.sonarqube_vpc.vpc_id
   target_port                       = local.sonarqube_tcp_port
+  aws_instance_id                   = module.sonarqube_server.instance_id
   providers = {
     aws = aws.main
   }
@@ -52,8 +71,8 @@ module "sonarqube_server" {
 
 module "sonarqube_https_certificate" {
   source                             = "./modules/acm"
-  aws_load_balancer_arn              = module.sonarqube_server.aws_load_balancer_arn
-  aws_load_balancer_target_group_arn = module.sonarqube_server.aws_load_balancer_target_group_arn
+  aws_load_balancer_arn              = module.sonarqube_load_balancer.lb_arn
+  aws_load_balancer_target_group_arn = module.sonarqube_load_balancer.tg_arn
   domain_name                        = "sonarqube.${var.root_domain_name}"
   hosted_zone_id                     = var.root_domain_hz_id
   providers = {

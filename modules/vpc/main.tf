@@ -1,16 +1,3 @@
-data "aws_region" "current" {}
-
-locals {
-  primary_az   = "${ data.aws_region.current.name }a"
-  secondary_az = "${ data.aws_region.current.name }b"
-}
-
-variable "vpc_name" {}
-variable "vpc_cidr_block" {}
-variable "public_subnet_cidr_block_az1" {}
-variable "public_subnet_cidr_block_az2" {}
-variable "open_port" { type = number }
-
 resource "aws_vpc" "this" {
   cidr_block = var.vpc_cidr_block
   enable_dns_hostnames = true
@@ -25,6 +12,9 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidr_block_az1
   map_public_ip_on_launch = true
   availability_zone       = local.primary_az
+  timeouts {
+    delete = "1m"
+  }
   tags = { Name = "${ var.vpc_name }-public-subnet-az1" }
 }
 
@@ -108,22 +98,15 @@ resource "aws_security_group_rule" "open_port" {
   description       = "Allow public access to application on port ${ var.open_port }"
 }
 
-resource "aws_ec2_instance_connect_endpoint" "public" {
-  subnet_id   = aws_subnet.public.id
-  security_group_ids = [aws_security_group.public.id]
-  preserve_client_ip = true
-
-  tags = {
-    Name = "${ var.vpc_name }-public-ec2-instance-connect-endpoint"
-  }
-}
-
 resource "aws_subnet" "public_az2" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = var.public_subnet_cidr_block_az2
   map_public_ip_on_launch = true
   availability_zone       = local.secondary_az
   tags = { Name = "${ var.vpc_name }-public-subnet-az2" }
+  timeouts {
+    delete = "1m"
+  }
 }
 
 resource "aws_route_table_association" "public_az2" {

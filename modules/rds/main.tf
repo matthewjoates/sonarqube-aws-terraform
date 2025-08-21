@@ -1,21 +1,3 @@
-variable "db_port"                           {}
-variable "vpc_id"                            {}
-variable "aws_source_security_group_id"      {}
-variable "db_url_prefix"                     { default = "" }
-variable "db_url_suffix"                     { default = "" }
-variable "aws_db_instance_username"          { default = "postgres" }
-variable "aws_db_instance_db_name"           { default = "postgres" }
-variable "aws_db_parameter_group_name"       { default = "postgres" }
-variable "aws_db_instance_allocated_storage" { default = 20 }
-variable "subnet_ids"                        { type = set(string) }
-
-data "aws_rds_orderable_db_instance" "postgres" {
-  engine         = "postgres"
-  engine_version = "17.4"
-  license_model = "postgresql-license"
-  preferred_instance_classes = ["db.t4g.medium"]
-}
-
 resource "aws_db_parameter_group" "main" {
   name   = "${var.aws_db_parameter_group_name}-17"
   family = "postgres17"
@@ -33,7 +15,7 @@ resource "aws_db_parameter_group" "main" {
 resource "random_password" "db_password" {
   length           = 16
   special         = true
-  override_special = "!@#%^&*()-_=+[]{}<>:?"
+  override_special = "!#%^&*()-_=+[]{}<>:?"
 }
 
 resource "aws_ssm_parameter" "db_password" {
@@ -92,5 +74,3 @@ resource "aws_security_group_rule" "ec2_to_db" {
   source_security_group_id = var.aws_source_security_group_id
   description = "Allow connection to ${ var.aws_db_instance_db_name }"
 }
-
-output "db_endpoint" { value = aws_db_instance.main.endpoint }

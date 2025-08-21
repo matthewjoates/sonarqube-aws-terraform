@@ -29,4 +29,4 @@ if ! [ $ret -eq 0 ]; then
     echo -e "Terraform Validation Failed." && exit 1
 fi
 
-terraform plan -detailed-exitcode -out=tfplan
+terraform plan -detailed-exitcode -out=output/tfplan

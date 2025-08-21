@@ -1,9 +1,3 @@
-variable "domain_name" {}
-variable "hosted_zone_id" {}
-variable "aws_load_balancer_arn" {}
-variable "aws_load_balancer_target_group_arn" {}
-
-
 resource "aws_acm_certificate" "cert" {
   domain_name       = var.domain_name
   validation_method = "DNS"
