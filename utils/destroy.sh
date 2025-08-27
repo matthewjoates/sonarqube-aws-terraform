@@ -11,10 +11,5 @@
 #
 # =============================================================================
 clear
-module_name="$1"
-if [ -n "$module_name" ]; then
-  source ./utils/init.sh
-  terraform destroy -target=module."$module_name" -auto-approve
-else
-  echo -e "Error: Module not provided.\nUsage: $0 <module_name>" && exit 1
-fi
+source ./utils/init.sh
+terraform destroy -auto-approve

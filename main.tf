@@ -36,8 +36,9 @@ module "sonarqube_db" {
 }
 
 module "sonarqube_network_interface" {
+  depends_on                        = [module.sonarqube_vpc]
   source                            = "./modules/ec2-network-interface"
-  network_interface_subnet_id       = module.sonarqube_vpc.public_subnet_id
+  network_interface_subnet_id       = module.sonarqube_vpc.public_subnet_az1_id
   network_interface_security_groups = [module.sonarqube_vpc.public_security_group_id]
   prefix                            = "sonarqube"
   providers = {
@@ -58,6 +59,7 @@ module "sonarqube_server" {
 }
 
 module "sonarqube_load_balancer" {
+  depends_on                        = [module.sonarqube_server]
   source                            = "./modules/ec2-load-balancer"
   prefix                            = "sonarqube"
   network_interface_security_groups = [module.sonarqube_vpc.public_security_group_id]
@@ -70,6 +72,7 @@ module "sonarqube_load_balancer" {
 }
 
 module "sonarqube_https_certificate" {
+  depends_on                         = [module.sonarqube_server]
   source                             = "./modules/acm"
   aws_load_balancer_arn              = module.sonarqube_load_balancer.lb_arn
   aws_load_balancer_target_group_arn = module.sonarqube_load_balancer.tg_arn

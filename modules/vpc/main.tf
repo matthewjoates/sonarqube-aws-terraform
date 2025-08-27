@@ -7,7 +7,7 @@ resource "aws_vpc" "this" {
   }
 }                                                                  
 
-resource "aws_subnet" "public" {
+resource "aws_subnet" "public_az1" {
   vpc_id                  = aws_vpc.this.id
   cidr_block              = var.public_subnet_cidr_block_az1
   map_public_ip_on_launch = true
@@ -18,12 +18,35 @@ resource "aws_subnet" "public" {
   tags = { Name = "${ var.vpc_name }-public-subnet-az1" }
 }
 
+resource "aws_subnet" "public_az2" {
+  vpc_id                  = aws_vpc.this.id
+  cidr_block              = var.public_subnet_cidr_block_az2
+  map_public_ip_on_launch = true
+  availability_zone       = local.secondary_az
+  tags = { Name = "${ var.vpc_name }-public-subnet-az2" }
+  timeouts {
+    delete = "1m"
+  }
+}
+resource "aws_route_table_association" "public_az2" {
+  route_table_id = aws_route_table.public.id
+  subnet_id = aws_subnet.public_az2.id
+}
+
+resource "aws_main_route_table_association" "public" {
+  depends_on     = [aws_subnet.public_az1, aws_subnet.public_az2, aws_vpc.this]
+  route_table_id = aws_route_table.public.id
+  vpc_id         = aws_vpc.this.id
+}
+
+
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.this.id
   tags = { Name = "${ var.vpc_name }-internet-gateway" }
 }
 
 resource "aws_route_table" "public" {
+  depends_on = [ aws_subnet.public_az1, aws_subnet.public_az2, aws_vpc.this ]
   vpc_id = aws_vpc.this.id
 
   route {
@@ -32,12 +55,6 @@ resource "aws_route_table" "public" {
   }
 
   tags = { Name = "${ var.vpc_name }-public-route-table" }
-}
-
-resource "aws_main_route_table_association" "public" {
-  depends_on     = [aws_subnet.public]
-  route_table_id = aws_route_table.public.id
-  vpc_id         = aws_vpc.this.id
 }
 
 resource "aws_security_group" "public" {
@@ -97,25 +114,3 @@ resource "aws_security_group_rule" "open_port" {
   security_group_id = aws_security_group.public.id
   description       = "Allow public access to application on port ${ var.open_port }"
 }
-
-resource "aws_subnet" "public_az2" {
-  vpc_id                  = aws_vpc.this.id
-  cidr_block              = var.public_subnet_cidr_block_az2
-  map_public_ip_on_launch = true
-  availability_zone       = local.secondary_az
-  tags = { Name = "${ var.vpc_name }-public-subnet-az2" }
-  timeouts {
-    delete = "1m"
-  }
-}
-
-resource "aws_route_table_association" "public_az2" {
-  route_table_id = aws_route_table.public.id
-  subnet_id = aws_subnet.public_az2.id
-}
-
-output "vpc_id"                      { value = aws_vpc.this.id }
-output "public_subnet_az1_id"        { value = aws_subnet.public.id }
-output "public_subnet_az2_id"        { value = aws_subnet.public_az2.id }
-output "public_security_group_id"    { value = aws_security_group.public.id }
-output "public_subnet_id"            { value = aws_subnet.public.id }
